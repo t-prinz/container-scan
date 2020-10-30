@@ -1,0 +1,80 @@
+---
+- name: Setup Clair components
+  hosts: "{{ target_host | default('NO_HOSTS')}}"
+  become: True
+  vars:
+    postgres_host: ""
+    postgres_user: postgres
+    postgres_password: password
+
+  tasks:
+#    - name: Ensure podman is installed
+#      package:
+#        name: podman
+#        state: latest
+
+    - name: See if the network is defined
+      command: podman network ls
+      register: network_status
+
+    - name: Create network if it is not defined
+      command: podman network create clairnet
+      when: '"clairnet" not in network_status.stdout'
+
+    - name: See if the Clair database is started
+      command: podman ps -a
+      register: database_status
+
+    - name: Start the Clair database if needed
+      command: "podman run --rm --rmi -d --name clairdb --network clairnet -e POSTGRES_PASSWORD={{ postgres_password }} postgres:9.6"
+      when: '"clairdb" not in database_status.stdout'
+
+    - name: Get IP address of the Clair database container (the PostgreSQL database)
+      command: podman inspect clairdb --format '{{ '{{' }}.NetworkSettings.Networks.clairnet.IPAddress{{ '}}' }}'
+      register: clairdb_info
+
+    - name: Define IP address variable for Clair database
+      set_fact:
+        postgres_host: "{{ clairdb_info.stdout }}"
+
+    - name: Print IP address of the Clair database
+      debug:
+        msg: "Clair database IP address:  {{ postgres_host }}"
+        verbosity: 1
+
+    - name: Ensure remote configuration directory exists
+      file:
+        path: clair_config
+        state: directory
+      become: False
+
+    - name: Ensure Clair configuration file is in place
+      template:
+        dest: clair_config/config.yaml
+        src: templates/config.j2
+      become: False
+
+    - name: See if Clair is started
+      command: podman ps -a
+      register: clair_status
+
+    - name: Start Clair if needed
+      command: podman run --rm --rmi --privileged=true --net=clairnet --name clairscanner -d -p 6060-6061:6060-6061 -v ./clair_config:/config quay.io/coreos/clair:latest -config=/config/config.yaml
+      when: '"clairscanner" not in clair_status.stdout'
+
+    - name: Obtain klar
+      get_url:
+        dest: ./klar-2.4.0-linux-amd64
+        mode: "0755"
+        url: https://github.com/optiopay/klar/releases/download/v2.4.0/klar-2.4.0-linux-amd64
+      become: False
+
+    - name: Check the health of Clair
+      command: curl -X GET -I http://localhost:6061/health
+      become: False
+      register: health_status
+
+    - name: Fail if the result is not as expected
+      fail:
+        msg: "Clair environment not responding correctly"
+      when: '"200 OK" not in health_status.stdout'

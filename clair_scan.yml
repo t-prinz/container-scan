@@ -1,0 +1,19 @@
+---
+- name: Scan a container image using Clair
+  hosts: "{{ target_host | default('NO_HOSTS')}}"
+  vars:
+    image_toscan: "ubuntu"
+
+  tasks:
+    - name: Invoked the scanner
+      shell: "CLAIR_ADDR=localhost ./klar-2.4.0-linux-amd64 {{ image_toscan }}"
+      register: scan_results
+
+    - name: Display complete results
+      debug:
+        var: scan_results
+        verbosity: 1
+
+    - name: Display scan results
+      debug:
+        var: scan_results.stdout_lines

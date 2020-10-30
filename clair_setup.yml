@@ -8,10 +8,10 @@
     postgres_password: password
 
   tasks:
-#    - name: Ensure podman is installed
-#      package:
-#        name: podman
-#        state: latest
+    - name: Ensure podman is installed
+      package:
+        name: podman
+        state: latest
 
     - name: See if the network is defined
       command: podman network ls

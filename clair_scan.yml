@@ -5,7 +5,7 @@
     image_toscan: "ubuntu"
 
   tasks:
-    - name: Invoked the scanner
+    - name: Invoke the scanner
       shell: "CLAIR_ADDR=localhost ./klar-2.4.0-linux-amd64 {{ image_toscan }}"
       register: scan_results
 
